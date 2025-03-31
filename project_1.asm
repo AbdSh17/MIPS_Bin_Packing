@@ -13,7 +13,7 @@
     #  ============ FILE PATH =================
     file_path: .space 255
 .text
-    .globl main, print_array, print_space, print_new_line, print_message, add_null
+    .globl main, print_array, print_space, print_new_line, print_message, add_null, file_handling
 
 
 # ================= Save Registors =================
@@ -33,6 +33,33 @@ main:
 menu:
 
 # ============ Reading the File ============
+    jal file_handling # return success or fail through $v0
+    
+    bnez $v0,  menu
+
+# ============ Reading the File ============
+    
+    j menu
+
+end_menu:
+    
+    li $v0, 10
+    syscall
+
+
+# ==================== // Main Function ==================== 
+# ============================================================
+# ============================================================
+# ============================================================
+# ============================================================
+# ============================================================
+# ============================================================
+
+file_handling:
+   
+   addi $sp, $sp, -4
+   sw $ra, 0($sp)
+   
    la $a1, request_file_path 
    jal print_message
   
@@ -41,7 +68,7 @@ menu:
    # $a1: maximum number of chars to read
    li $v0, 8 
    la $a0, file_path
-   move $a1, $s0 # %$s0 = 255
+   move $a1, $s0 # $s0 = 255
    syscall
    
    # add null to the end of the file path
@@ -67,7 +94,11 @@ menu:
     la $a1, error_file_msg
     jal print_message
     
-    j menu
+    li $v0, -1
+    
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
 # =========== IF error =========== 
 
 no_error:
@@ -92,24 +123,15 @@ no_error:
     li $v0, 16
     move $a0, $s1
     syscall
-
-# ============ Reading the File ============
     
-    j menu
-
-end_menu:
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
     
-    li $v0, 10
-    syscall
+    li $v0, 0
+    jr $ra
 
 
-# ==================== // Main Function ==================== 
-# ============================================================
-# ============================================================
-# ============================================================
-# ============================================================
-# ============================================================
-# ============================================================
+
 
 # ==================== ADD NULL Function ==================== 
 add_null: 
@@ -153,10 +175,9 @@ already_null:
     
     lw $ra, 0($sp)
     addi $sp, $sp, 4
-    
+   
     jr $ra
     
-
 # ==================== Print ARRAY Function ==================== 
 print_array:
     addi $sp, $sp, -4

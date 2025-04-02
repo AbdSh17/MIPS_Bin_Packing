@@ -52,9 +52,8 @@ menu:
 
    # ============ Reading the File ============
     jal file_handling # return success or fail through $v0
-    bnez $v0,  menu
+    bnez $v0,  menu 
     # ============ // Reading the File ============
-
 
     # ============ Create array ============
     la $a1, new_line

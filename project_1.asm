@@ -31,7 +31,7 @@
     unvalid_fitting_method: .asciiz "\nERROR, The chosen method is unvalid, Please Enter FF, BF or Q/q\n"
     
 .text
-    .globl main, print_array, print_space, print_new_line, print_message, add_null, file_handling, string_to_integer,choose_algorithim,first_fit,best_fit,quit
+    .globl main, print_array, print_message, add_null, file_handling, string_to_integer,choose_algorithim,first_fit,best_fit,quit
 
 
 # ================= Save Registors =================
@@ -203,26 +203,26 @@ end_choosing_method:
 # ====================================================================
 
 file_handling:
-   
+
    addi $sp, $sp, -4
    sw $ra, 0($sp)
    
    la $a1, request_file_path 
    jal print_message
-  
-   # read input file name by user (syscall 8)
-   # $a0: address of array (to save input by user)
-   # $a1: maximum number of chars to read
+
+#read input file name by user(syscall 8)
+#$a0 : address of array(to save input by user)
+#$a1 : maximum number of chars to read
    li $v0, 8 
    la $a0, file_path
    move $a1, $s0 # $s0 = 255
    syscall
-   
-   # add null to the end of the file path
+
+#add null to the end of the file path
    la $a1, file_path
    jal add_null
-   
-   # handle if equal Q | q
+
+#handle if equal Q | q
    la $a1, file_path
    lb $t4, 0($a1)
    beq $t4, 0x51, quit
@@ -232,10 +232,10 @@ file_handling:
    jal quit
 
 no_quit:
-    # Open the file (syscall 13)
-    # $a0: file_path 
-    # $a1: Read or Write 
-    # $a2: Mode (ignore)
+#Open the file(syscall 13)
+#$a0 : file_path
+#$a1 : Read or Write
+#$a2 : Mode(ignore)
     li $v0, 13 # open file syscall
     la $a0, file_path #file_path
     li $a1, 0 # 0: (read only)
@@ -246,8 +246,8 @@ no_quit:
     
     bgez $s1, no_error # if no error, skip
 
-# =========== IF error =========== 
-    # ERROR MESSAGE
+#== == == == == = IF error == == == == == =
+#ERROR MESSAGE
     la $a1, error_file_msg
     jal print_message
     
@@ -256,15 +256,15 @@ no_quit:
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     jr $ra
-# =========== IF error =========== 
+#== == == == == = IF error == == == == == = 
 
 no_error:
-    
-    # Read the file (syscall 14)
+
+#Read the file(syscall 14)
     li $v0, 14 # Open file syscall
-    # $a0: File descriptor
-    # $a1: address of array to save file in
-    # $a2: maximum number of char to read
+#$a0 : File descriptor
+#$a1 : address of array to save file in
+#$a2 : maximum number of char to read
     move $a0, $s1 
     la $a1, size
     move $a2, $s0
@@ -272,15 +272,15 @@ no_error:
     
     move $s2, $v0   # number of bytes read
 
-    # Print 'size' (syscall 4)
+#Print 'size'(syscall 4)
     
     la $a1, file_content_message
     jal print_message
     
     la $a1, size
     jal print_message
-    
-    # Close file (syscall 16)
+
+#Close file(syscall 16)
     li $v0, 16
     move $a0, $s1
     syscall
@@ -290,7 +290,6 @@ no_error:
     
     li $v0, 0
     jr $ra
-
 # ====================================================================
 # ==================== READ Sizes Function ==================== 
 # ====================================================================
@@ -299,7 +298,7 @@ read_sizes:
     sw $ra, 0($sp)
 
     la $t0, size
-    # flag for if we are in the integer area or decimal, EX: 0.12 (0: integer area) - (12: decimal area)
+#flag for if we are in the integer area or decimal, EX : 0.12(0 : integer area) - (12 : decimal area)
     li $t2, 0 # 0 integer area, 1 decimal area
     
     la $t4, sizes_array
@@ -338,11 +337,11 @@ point_loop: # loop to keep counting decimals after the point .123456789
     beq $t1, 0x2C, end_point_loop # if the next is comma
     bgt $t1, 0x39, non_zero_integer # ERROR ( > 9 )
     blt $t1, 0x30, non_zero_integer # ERROR ( < 0 )
-    # === convert to string ===
+#=== convert to string ===
     move $a1, $t1
     jal string_to_integer # (take $a1 as an arguiment, return $v0)
     move $t1, $v0
-    # === convert to string ===
+#=== convert to string ===
     mtc1 $t1, $f3
     cvt.s.w $f3, $f3    # convert from integer to float
     mul.s $f3, $f3, $f0 # $f3 *= 10^-x
@@ -372,7 +371,7 @@ zero_integer_handle: # if facing a '0' (0.plaplapla)
 
     addi $t0, $t0, 1
     lb $t1, 0($t0)
-    # if after the zero is not a point or other zero, ERROR (00.222,0.plapla)
+#if after the zero is not a point or other zero, ERROR(00.222, 0.plapla)
     beq $t1, 0x30, read_sizes_loop
     beq $t1, 0x2E, read_sizes_loop
     j non_zero_integer
@@ -404,7 +403,6 @@ string_to_integer: # (arguments: String a1, Return: Integer $v0)
     addi $sp, $sp, -4
     sw $t0, 0($sp)
     
-    
     move $t0, $a1
     subi $t0, $t0, 0x30 # (HEX: 0 = 0X30, 1 = 0X31 etc...)
     move $v0, $t0
@@ -420,19 +418,10 @@ string_to_integer: # (arguments: String a1, Return: Integer $v0)
 # ===========================================================
 # ==================== ADD NULL Function ==================== 
 # ===========================================================
-add_null: 
-    # File path is stored into $a1
+add_null: # File path is stored into $a1
+    
     addi $sp, $sp, -4
     sw $ra, 0($sp)
-    
-    addi $sp, $sp, -4
-    sw $t0, 0($sp)
-    
-    addi $sp, $sp, -4
-    sw $t1, 0($sp)
-    
-    addi $sp, $sp, -4
-    sw $a0, 0($sp)
     
     li $t1, 10 # '\n'
 
@@ -445,26 +434,33 @@ add_null_loop:
     addi $a1, $a1, 1
     j add_null_loop
 
-
 end_add_null_loop:
     sb $zero, 0($a1)
 
+# Exit the function
 already_null:
  
-    lw $a0, 0($sp)
-    addi $sp, $sp, 4
-    
-    lw $t1, 0($sp)
-    addi $sp, $sp, 4
-    
-    lw $t0, 0($sp)
-    addi $sp, $sp, 4
-    
     lw $ra, 0($sp)
     addi $sp, $sp, 4
    
     jr $ra
 
+# ================================================================
+# ==================== Print Message Function ==================== 
+# ================================================================
+ print_message:
+
+    li $v0, 4
+    move $a0, $a1
+    syscall
+
+    jr $ra
+    
+quit:
+
+    li $v0, 10
+    syscall 
+    
 # ==============================================================
 # ==================== Print ARRAY Function ====================
 # ============================================================== 
@@ -478,14 +474,11 @@ print_array:
     la $t1, space
     
     move $t3, $a1
-    
-    
-    
+
 print_array_loop:
     l.s $f12, 0($t0)
     addi $t0, $t0, 4
     subi $t3, $t3, 1
-    
     
     li $v0, 2
     syscall
@@ -507,92 +500,3 @@ end_print_array_loop:
     addi $sp, $sp, 4
     
     jr $ra
-    
-# =============================================================
-# ==================== Print SPACE Function ==================== 
-# ==============================================================
-print_space:
-    addi $sp, $sp, -4
-    sw $ra, 0($sp)
-    
-    addi $sp, $sp, -4
-    sw $a0, 0($sp)
-    
-    addi $sp, $sp, -4
-    sw $v0, 0($sp)
-    
-    li $v0, 4
-    la $a0, space
-    syscall
-    
-    lw $v0, 0($sp)
-    addi $sp, $sp, 4
-    
-    lw $a0, 0($sp)
-    addi $sp, $sp, 4
-    
-    lw $ra, 0($sp)
-    addi $sp, $sp, 4
-    
-    jr $ra
-
-# =================================================================
-# ==================== Print NEW LINE Function ==================== 
-# =================================================================
-print_new_line:
-    addi $sp, $sp, -4
-    sw $ra, 0($sp)
-    
-    addi $sp, $sp, -4
-    sw $a0, 0($sp)
-    
-    addi $sp, $sp, -4
-    sw $v0, 0($sp)
-    
-    li $v0, 4
-    la $a0, new_line
-    syscall
-    
-    lw $v0, 0($sp)
-    addi $sp, $sp, 4
-    
-    lw $a0, 0($sp)
-    addi $sp, $sp, 4
-    
-    lw $ra, 0($sp)
-    addi $sp, $sp, 4
-    
-    jr $ra
-
-# ================================================================
-# ==================== Print Message Function ==================== 
-# ================================================================
- print_message:
-    addi $sp, $sp, -4
-    sw $ra, 0($sp)
-    
-    addi $sp, $sp, -4
-    sw $a0, 0($sp)
-    
-    addi $sp, $sp, -4
-    sw $v0, 0($sp)
-    
-    li $v0, 4
-    move $a0, $a1
-    syscall
-    
-    lw $v0, 0($sp)
-    addi $sp, $sp, 4
-    
-    lw $a0, 0($sp)
-    addi $sp, $sp, 4
-    
-    lw $ra, 0($sp)
-    addi $sp, $sp, 4
-    
-    jr $ra
-    
-quit:
-
-    li $v0, 10
-    syscall 

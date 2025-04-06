@@ -2,6 +2,7 @@
     # ============= Messages =============
     space: .asciiz  " "
     new_line: .asciiz  "\n"
+    colon: .asciiz  ": "
     initial_menu_message: .asciiz "Welcome to project1 menu, before we start notice that \n1- every string request max size is 255 bit\n2- file can handle up to 40 floats (more than that will be ignored)\n"
     request_file_path: .asciiz "\nPlease enter the file path, Enter q/Q to quit: "
     requist_fitting_method: .asciiz "\n\nPlease enter the fitting method \nEnter FF for 'first fit' or BF for 'best fit', Enter q/Q to quit: " 
@@ -12,6 +13,8 @@
     .align 2 # default is '2' BTW, but for readability
     size: .space 255 # saving the function content
     fitting_method: .space 3 # two letters + '\n' = 3 bytes
+    full_bin_capacity: .float 1.0
+    end_of_array: .float -1.0
     
     # *************** Main array *******************
     #sizes_array: .float 0.0:40
@@ -36,21 +39,24 @@
 
 # ================= Save Registors =================
 # $S0: Maximum_input bits (255)
-# $S1: File Descriptor
-# $S2: Number of bytes read from the file
-# $S3: Array Lenght
+# $S1: Array Lenght
+#
+# $S3: Main Array Address
+# $S4: Numbered Array Address
+# $S5: Oned Array Address
+# $S6: Array Of Adresses Address
+#
+#
 
 # ==================== Main Function ==================== 
 main:
-    
     la $a1, initial_menu_message
     jal print_message
     
     lh $s0, maximum_input # maximum number of input bits allowed
    
 menu:
-
-   # ============ Reading the File ============
+    # ============ Reading the File ============
     jal file_handling # return success or fail through $v0
     bnez $v0,  menu 
     # ============ // Reading the File ============
@@ -61,42 +67,65 @@ menu:
     
     jal get_array_length #(return array length through $v0)
     move $a0, $v0
-    move $s3, $v0
+    move $s1, $v0
     jal read_sizes # get array size through $a0
     # ============ // Create array ============
-    
     
     # ============ Print array ============
     la $a1, sizes_array_content_message
     jal print_message
     
-    move $t0, $s4
-    move $a1, $s3
+    move $t0, $s3
+    move $a1, $s1
     jal print_array
     # ============ // Print array ============
+    
+    # =========== Prepare bins ===========
+    move $a0, $s1
+    move $t9,$a0
+    jal make_numbered_array
+    move $s4,$v0
+    
+    move $a0, $s1
+    jal make_oned_array
+    move $s5,$v0
+    
+    move $a0, $s1
+    jal make_addresses_array
+    move $s6,$v0
+    # =========== // Prepare bins ===========
     
     # ============ // Choose Algorithim ============
 choose_fitting_method:
     jal choose_algorithim # return 1 if FF, 2 if BF, -1 if nor through $v0
     
+    move $a1,$s3
+    move $a2,$s5
+    move $a3,$s6
+    move $a0, $s1
+    
     bne $v0, 1, v0_is_not_1 # if 1 then FF
     jal first_fit # go to FF function
+    j done_fitting
     
 v0_is_not_1:
-    
     bne $v0, 2, v0_is_not_2 # if 2 then BF
     jal best_fit # go to BF function
-
+    j done_fitting
+    
 v0_is_not_2:
     la $a1, unvalid_fitting_method
     jal print_message
+    j done_fitting
+    
+done_fitting:
+    move $a0, $s6 # Array of addresses
+    move $a1, $s1 # Array length
+    jal print_fitting
     
     j choose_fitting_method
-    
-    j menu
     # ============ // Choose Algorithim ============
 end_menu:
-    
     li $v0, 10
     syscall
 
@@ -111,137 +140,262 @@ end_menu:
 # ====================================================================
 # ==================== First fit Function ============================
 # ====================================================================
-
 first_fit:
-
-   la $a1, sizes_array_content_message # Print this message for debugging, remove it later
-   jal print_message
-   
-   jal quit
-
+    add $t1, $a0, 1 #num of elements +1
+    move $t2,$a1 #address of the array
+    li $t3,1 #counter
+    
+Firstloop: #first loop to go over all the items
+    lwc1 $f1,0($t2)
+    li $t4,1 #counter for the second loop **Not neceassry maybe delete **
+    move $t5,$a2 #contains the 1's array
+    move $t6,$a3 #contains the array of arrays
+    
+Secondloop: #second loop to go over the bins
+    lwc1 $f2,0($t5)
+    c.lt.s $f1,$f2  #bgt $f2,$f1,greater
+    bc1t greater
+    
+    add $t5,$t5,4
+    add $t6,$t6,4
+    b Secondloop
+    
+greater:
+    sub.s $f2,$f2,$f1
+    swc1 $f2,0($t5)
+    move $t7,$a1 #put the value temporily in t7
+    lw $t0,0($t6) #put the address of the bin in a1
+    move $a1,$t0
+    move $t8,$ra #put the contet inside of t8 so we can return to the main fucntion
+    jal return_first_empty_cell
+    move $a1,$t7 # return the values
+    move $ra,$t8
+    move $t7,$v0
+    swc1 $f1,0($t7) #store the item at the returned address
+    
+    add $t2,$t2,4 #increment for the loop
+    add $t3,$t3,1
+    bne $t3,$t1 Firstloop
+    
+    jr $ra
 
 # ====================================================================
-# ==================== Best fit Function ==================== 
+# ==================== Return First Empty Cell =======================
 # ====================================================================
-
+return_first_empty_cell:
+    move $t9,$a1
+    la $t0,end_of_array
+    lwc1 $f5,0($t0) # f5 = -1.0
+LOOP:
+    lwc1 $f4,0($t9)
+    c.eq.s $f4,$f5 #beq $f4,$f5,found
+    bc1t found
+    
+    add $t9,$t9,4
+    b LOOP
+found:
+    move $v0,$t9
+    jr $ra
+    
+# ====================================================================
+# ==================== Best fit Function =============================
+# ====================================================================
 best_fit:
-
-   la $a1, file_content_message # Print this message for debugging, remove it later
-   jal print_message
+    la $a1, file_content_message # Print this message for debugging, remove it later
+    jal print_message
    
-   jal quit
+    jal quit
 
+# ====================================================================
+# ==================== Make Numbered Array Function ==================== 
+# ====================================================================
+make_numbered_array:
+    #-----------------Allocating memory for the Array---------------
+    add $t4,$a0,1  #number of elemnts +1 
+    sll $a0,$a0,2
+    li $v0,9
+    syscall
+    move $t1,$v0
+    #-------------------numbering the array-------------------------
+    add $t2,$t1,-4
+    li $t3,1  #counter
+loop:
+    add $t2,$t2,4
+    sw $t3,0($t2)
+    add $t3,$t3,1
+    bne $t3,$t4,loop
+    #-------------------move the pointer to the base of the array to v0 to return------------
+    move $v0,$t1
+    jr $ra
+
+# ====================================================================
+# ==================== Make Oned Array Function ==================== 
+# ====================================================================
+make_oned_array:
+    #-----------------Allocating memory for the Array---------------
+    add $t4,$a0,1  #number of elemnts +1 
+    sll $a0,$a0,2
+    li $v0,9
+    syscall
+    move $t1,$v0
+    #--------------Putting 1.0 in each cell of the array----------
+    move $t2,$t1
+    li $t3,1  #counter
+    la $t5,full_bin_capacity
+    lwc1 $f1,0($t5)
+loop2:
+    swc1 $f1,0($t2)
+    add $t2,$t2,4
+    add $t3,$t3,1
+    bne $t3,$t4,loop2
+    #-------------------move the pointer to the base of the array to v0 to return------------
+    move $v0,$t1
+    jr $ra
+    
+#-------------------End of make oned array---------------------
+
+# ====================================================================
+# ==================== Make Adresses Array Function ==================== 
+# ====================================================================
+make_addresses_array:
+    #-----------------------Allocating memory for the Array-------------
+    add $t4,$a0,1  #number of elemnts +1 
+    sll $a0,$a0,2
+    li $v0,9
+    syscall
+    move $t1,$v0
+    move $t2,$t1
+    #---------------------Making An array for each cell, and putting the addresses inside thoes cells--------
+    li $t3,1 #counter
+    la $t5,end_of_array
+    lwc1 $f1,0($t5) #f1 = -1.0
+
+First_loop: #for making the pointer array and filling it cells with the addresses of the pointed arrays
+    li $v0,9
+    syscall
+    sw $v0,0($t2)
+    move $t7,$v0
+    li $t6,1 #counter for 2nd loop
+
+Second_loop: #for filling the pointed arrays with -1.0
+    swc1 $f1,0($t7)
+    add $t7,$t7,4
+    add $t6,$t6,1
+    bne $t6,$t4,Second_loop
+    
+    add $t2,$t2,4
+    add $t3,$t3,1
+    bne $t3,$t4,First_loop
+    
+    move $v0,$t1
+    jr $ra
+    
+#-------------------End of make addresses array-----------
+    
 
 # ====================================================================
 # ==================== Choose Algorithim Function ==================== 
 # ====================================================================
-
 choose_algorithim:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
 
-   addi $sp, $sp, -4
-   sw $ra, 0($sp)
-
-   la $a1, requist_fitting_method # print a message to requist choose FF,BF or Q/q
-   jal print_message
+    la $a1, requist_fitting_method # print a message to requist choose FF,BF or Q/q
+    jal print_message
    
-   # read input String by user (syscall 8)
-   # $a0: address of array (to save input by user)
-   # $a1: maximum number of chars to read
-   la $a0, fitting_method 
-   li $a1, 3 # $a1 = maximum_input
-   li $v0, 8
-   syscall
+    # read input String by user (syscall 8)
+    # $a0: address of array (to save input by user)
+    # $a1: maximum number of chars to read
+    la $a0, fitting_method 
+    li $a1, 3 # $a1 = maximum_input
+    li $v0, 8
+    syscall
    
-   lb $t0, 0($a0) # First charachter
-   addi $a0, $a0, 1
-   lb $t5, 0($a0)
-   bne $t5, 0x0A, is_FF # if the input not just 'q'
-   beq $t0, 0X51, quit
-   beq $t0, 0X71, quit
-   j is_FF
+    lb $t0, 0($a0) # First charachter
+    addi $a0, $a0, 1
+    lb $t5, 0($a0)
+    bne $t5, 0x0A, is_FF # if the input not just 'q'
+    beq $t0, 0X51, quit
+    beq $t0, 0X71, quit
+    j is_FF
 
-   # =========== Check if equail FF ===========
+    # =========== Check if equail FF ===========
 is_FF:
-   addi $a0, $a0, -1
-   lb $t0, 0($a0) # First charachter
-   bne $t0, 0x46, is_BF # if $a0[0] != F
+    addi $a0, $a0, -1
+    lb $t0, 0($a0) # First charachter
+    bne $t0, 0x46, is_BF # if $a0[0] != F
    
-   lb $t0, 1($a0) # Second charachter (Displacment)
-   bne $t0, 0x46, is_BF # if $a0[1] != F
+    lb $t0, 1($a0) # Second charachter (Displacment)
+    bne $t0, 0x46, is_BF # if $a0[1] != F
    
-   li $t2, 1 # return 1 if FF
+    li $t2, 1 # return 1 if FF
    
-   j end_choosing_method
+    j end_choosing_method
    
 is_BF:
-
-   lb $t0, 0($a0) # First charachter
-   bne $t0, 0x42, not_FF_BF # if $a0[0] != B
+    lb $t0, 0($a0) # First charachter
+    bne $t0, 0x42, not_FF_BF # if $a0[0] != B
    
-   lb $t0, 1($a0) # Second charachter (Displacment)
-   bne $t0, 0x46, not_FF_BF # if $a0[1] != F
+    lb $t0, 1($a0) # Second charachter (Displacment)
+    bne $t0, 0x46, not_FF_BF # if $a0[1] != F
    
-   li $t2, 2 # return 2 if BF
+    li $t2, 2 # return 2 if BF
    
-   j end_choosing_method
+    j end_choosing_method
 
 not_FF_BF:
-
-   li $t2, -1 # return -1 if neither FF nor BF
+    li $t2, -1 # return -1 if neither FF nor BF
    
-   # Print a message
-   j end_choosing_method
+    # Print a message
+    j end_choosing_method
 
 end_choosing_method:
+    move $v0, $t2 # the return value
 
-   move $v0, $t2 # the return value
-
-   lw $ra, 0($sp)
-   addi $sp, $sp, 4
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
    
-   jr $ra
+    jr $ra
 
 # ====================================================================
 # ==================== File Handle Function ==================== 
 # ====================================================================
-
 file_handling:
-
-   addi $sp, $sp, -4
-   sw $ra, 0($sp)
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
    
-   la $a1, request_file_path 
-   jal print_message
+    la $a1, request_file_path 
+    jal print_message
 
-#read input file name by user(syscall 8)
-#$a0 : address of array(to save input by user)
-#$a1 : maximum number of chars to read
-   li $v0, 8 
-   la $a0, file_path
-   move $a1, $s0 # $s0 = 255
-   syscall
+    #read input file name by user(syscall 8)
+    #$a0 : address of array(to save input by user)
+    #$a1 : maximum number of chars to read
+    li $v0, 8 
+    la $a0, file_path
+    move $a1, $s0 # $s0 = 255
+    syscall
 
-#add null to the end of the file path
-   la $a1, file_path
-   jal add_null
+    #add null to the end of the file path
+    la $a1, file_path
+    jal add_null
 
-#handle if equal Q | q
-   la $a1, file_path
-   lb $t4, 0($a1)
-   addi $a1, $a1, 1
-   lb $t5, 0($a1)
-   bne $t5, 0, no_quit # if the input not just 'q'
-   beq $t4, 0x51, quit
-   beq $t4, 0x71, quit
-   j no_quit # if not equail, SKIP
+    #handle if equal Q | q
+    la $a1, file_path
+    lb $t4, 0($a1)
+    addi $a1, $a1, 1
+    lb $t5, 0($a1)
+    bne $t5, 0, no_quit # if the input not just 'q'
+    beq $t4, 0x51, quit
+    beq $t4, 0x71, quit
+    j no_quit # if not equail, SKIP
    
-   jal quit
+    jal quit
 
 no_quit:
-#Open the file(syscall 13)
-#$a0 : file_path
-#$a1 : Read or Write
-#$a2 : Mode(ignore)
+    #Open the file(syscall 13)
+    #$a0 : file_path
+    #$a1 : Read or Write
+    #$a2 : Mode(ignore)
     li $v0, 13 # open file syscall
     la $a0, file_path #file_path
     li $a1, 0 # 0: (read only)
@@ -252,8 +406,8 @@ no_quit:
     
     bgez $s1, no_error # if no error, skip
 
-#=========== IF error =========== 
-#ERROR MESSAGE
+    #=========== IF error =========== 
+    #ERROR MESSAGE
     la $a1, error_file_msg
     jal print_message
     
@@ -262,31 +416,27 @@ no_quit:
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     jr $ra
-#=========== IF error =========== 
+    #=========== IF error =========== 
 
 no_error:
-
-#Read the file(syscall 14)
+    #Read the file(syscall 14)
     li $v0, 14 # Open file syscall
-#$a0 : File descriptor
-#$a1 : address of array to save file in
-#$a2 : maximum number of char to read
+    #$a0 : File descriptor
+    #$a1 : address of array to save file in
+    #$a2 : maximum number of char to read
     move $a0, $s1 
     la $a1, size
     move $a2, $s0
     syscall 
-    
-    move $s2, $v0   # number of bytes read
 
-#Print 'size'(syscall 4)
-    
+    #Print 'size'(syscall 4)
     la $a1, file_content_message
     jal print_message
     
     la $a1, size
     jal print_message
 
-#Close file(syscall 16)
+    #Close file(syscall 16)
     li $v0, 16
     move $a0, $s1
     syscall
@@ -296,6 +446,7 @@ no_error:
     
     li $v0, 0
     jr $ra
+
 # ====================================================================
 # ==================== READ Sizes Function ==================== 
 # ====================================================================
@@ -308,14 +459,13 @@ read_sizes:
     li $v0, 9
     syscall
     move $t4, $v0 # address of alocated array
-    move $s4, $v0
+    move $s3, $v0
     
     la $t0, size
-#flag for if we are in the integer area or decimal, EX : 0.12(0 : integer area) - (12 : decimal area)
+    #flag for if we are in the integer area or decimal, EX : 0.12(0 : integer area) - (12 : decimal area)
     li $t2, 0 # 0 integer area, 1 decimal area
     
     li $t5, 0 # will be used to count length
-    
     
 read_sizes_loop:
     lb $t1, 0($t0)
@@ -342,18 +492,17 @@ point:
     la $t7, ten_float_value 
     l.s $f2, 0($t7) # load 10.0 initially
     
-    
 point_loop: # loop to keep counting decimals after the point .123456789
     lb $t1, 0($t0)
     beqz $t1, end_point_loop # if the next is null
     beq $t1, 0x2C, end_point_loop # if the next is comma
     bgt $t1, 0x39, non_zero_integer # ERROR ( > 9 )
     blt $t1, 0x30, non_zero_integer # ERROR ( < 0 )
-#=== convert to string ===
+    #=== convert to string ===
     move $a1, $t1
     jal string_to_integer # (take $a1 as an arguiment, return $v0)
     move $t1, $v0
-#=== convert to string ===
+    #=== convert to string ===
     mtc1 $t1, $f3
     cvt.s.w $f3, $f3    # convert from integer to float
     mul.s $f3, $f3, $f0 # $f3 *= 10^-x
@@ -364,7 +513,6 @@ point_loop: # loop to keep counting decimals after the point .123456789
     j point_loop
 
 end_point_loop: 
-    
     ceil.w.s $f2, $f1 # translet it into ceiling (to check if zero, if one then it's ok)
     mfc1 $t6, $f2 # move into $t6
     beqz $t6, non_zero_integer # ERROR, End the loop
@@ -374,7 +522,6 @@ end_point_loop:
     beqz $t1, end_read_sizes_loop
     
 skip: # if facing a comma ',' (0.12,0.13) or others need to skip
-    
     addi $t0, $t0, 1
     li $t2, 0
     lb $t1, 0($t0)
@@ -382,14 +529,12 @@ skip: # if facing a comma ',' (0.12,0.13) or others need to skip
     j read_sizes_loop # continue
    
 non_zero_integer:
-    
     la $a1, file_error_more_than_zero # if the integer is not zero, ERROR
     jal print_message
     
     jal quit
 
 end_read_sizes_loop:
-
     move $v0, $t5 # the return address of array length
     
     lw $ra, 0($sp)
@@ -400,7 +545,6 @@ end_read_sizes_loop:
 # ====================================================================
 # ==================== String To Integer Function ==================== 
 # ====================================================================
-
 string_to_integer: # (arguments: String a1, Return: Integer $v0)
     addi $sp, $sp, -4
     sw $ra, 0($sp)
@@ -424,15 +568,13 @@ string_to_integer: # (arguments: String a1, Return: Integer $v0)
 # ==================== ADD NULL Function ==================== 
 # ===========================================================
 add_null: # File path is stored into $a1
-    
     addi $sp, $sp, -4
     sw $ra, 0($sp)
     
     li $t1, 10 # '\n'
 
-# loop until find '\n' or '\0'
+    # loop until find '\n' or '\0'
 add_null_loop: 
-    
     lb $t0, 0($a1)
     beq $t0, $t1, end_add_null_loop
     beqz $t0, already_null
@@ -442,9 +584,8 @@ add_null_loop:
 end_add_null_loop:
     sb $zero, 0($a1)
 
-# Exit the function
+    # Exit the function
 already_null:
- 
     lw $ra, 0($sp)
     addi $sp, $sp, 4
    
@@ -453,8 +594,7 @@ already_null:
 # ================================================================
 # ==================== Print Message Function ==================== 
 # ================================================================
- print_message:
-
+print_message:
     li $v0, 4
     move $a0, $a1
     syscall
@@ -462,14 +602,12 @@ already_null:
     jr $ra
     
 quit:
-
     li $v0, 10
     syscall 
 
 # ==============================================================
 # ==================== ARRAY Length Function ====================
 # ============================================================== 
-
 get_array_length:
     addi $sp, $sp, -4
     sw $ra, 0($sp)
@@ -485,12 +623,90 @@ get_array_length_loop:
     j get_array_length_loop
     
 comma:
-   addi $t1, $t1, 1
-   j get_array_length_loop
+    addi $t1, $t1, 1
+    j get_array_length_loop
     
 end_get_array_length_loop:
     addi $t1, $t1, 1
     move $v0, $t1
+    jr $ra
+# ==============================================================
+# ==================== Print Fitting Function ====================
+# ============================================================== 
+print_fitting: # $a0: Fitting Array Address - $a1: Array Length
+   
+   addi $sp, $sp, -4
+   sw $ra, 0($sp) 
+   
+   move $t0, $a0 # Fitting Array Address
+   move $t1, $a1 # Array Length
+   li $t2, -1 # Counter
+   la $t4, space # to print spaces
+   la $t5, new_line # to print new lines
+   la $t8, colon
+address_array_loop:
+
+    addi $t2, $t2, 1
+    beq $t2, $t1, end_print_fitting
+    
+    # ==== print new line ====
+    move $a1, $t5 
+    jal print_message
+    move $a1, $t5 
+    jal print_message
+    # ==== print new line ====
+    
+    # ==== load array address ====
+    lw $t3,0($t0)
+    addi $t0, $t0, 4
+    # ==== load array address ====
+    
+    # ==== check the first number of the array ====
+    lwc1 $f12,0($t3)
+    cvt.w.s $f13, $f12
+    mfc1    $t6, $f13     
+    beq $t6, -1 , end_print_fitting
+    # ==== check the first number of the array ====
+    
+    # ==== print index ====
+    move $a0, $t2
+    li $v0, 1
+    syscall 
+    
+    move $a1, $t8 # print colon
+    jal print_message
+    # ==== print index ====
+    
+    
+    move $a1, $t5 # print new line
+    jal print_message
+
+    
+elemnts_array_loop:  
+    
+    lwc1 $f12,0($t3)
+    
+    # ==== check the number if -1 ====
+    cvt.w.s $f13, $f12
+    mfc1    $t6, $f13     
+    beq $t6, -1 , address_array_loop
+    # ==== check the number if -1 ====
+    
+    # print the number
+    li $v0,2
+    syscall
+    
+    add $t3,$t3,4
+
+    la $a1, space
+    jal print_message
+    
+    j elemnts_array_loop
+    
+end_print_fitting:
+
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
     jr $ra
     
 # ==============================================================
@@ -524,7 +740,6 @@ print_array_loop:
     j print_array_loop
     
 end_print_array_loop:
-
     lw $a0, 0($sp)
     addi $sp, $sp, 4
     

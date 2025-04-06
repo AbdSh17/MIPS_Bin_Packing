@@ -14,7 +14,7 @@
     fitting_method: .space 3 # two letters + '\n' = 3 bytes
     
     # *************** Main array *******************
-    sizes_array: .float 0.0:40
+    #sizes_array: .float 0.0:40
     # *************** Main array *******************
     
     maximum_input: .half 255
@@ -29,9 +29,9 @@
     file_error_more_than_zero: .asciiz "ERROR, file values should be 0 < X < 1 \n"
     error_file_msg: .asciiz "ERROR, Failed to open the file\n"
     unvalid_fitting_method: .asciiz "\nERROR, The chosen method is unvalid, Please Enter FF, BF or Q/q\n"
-    
+
 .text
-    .globl main, print_array, print_message, add_null, file_handling, string_to_integer,choose_algorithim,first_fit,best_fit,quit
+    .globl main, print_array, print_message, add_null, file_handling, get_array_length, string_to_integer,choose_algorithim,first_fit,best_fit,quit
 
 
 # ================= Save Registors =================
@@ -42,7 +42,7 @@
 
 # ==================== Main Function ==================== 
 main:
-
+    
     la $a1, initial_menu_message
     jal print_message
     
@@ -54,13 +54,15 @@ menu:
     jal file_handling # return success or fail through $v0
     bnez $v0,  menu 
     # ============ // Reading the File ============
-
+    
     # ============ Create array ============
     la $a1, new_line
     jal print_message
     
-    jal read_sizes # (return array length through $v0)
+    jal get_array_length #(return array length through $v0)
+    move $a0, $v0
     move $s3, $v0
+    jal read_sizes # get array size through $a0
     # ============ // Create array ============
     
     
@@ -68,8 +70,8 @@ menu:
     la $a1, sizes_array_content_message
     jal print_message
     
-    la $t0, sizes_array
-    li $a1, 4
+    move $t0, $s4
+    move $a1, $s3
     jal print_array
     # ============ // Print array ============
     
@@ -151,15 +153,16 @@ choose_algorithim:
    syscall
    
    lb $t0, 0($a0) # First charachter
-   beq $t0, 0X51, choose_algorithim_quit
-   beq $t0, 0X71, choose_algorithim_quit
+   addi $a0, $a0, 1
+   lb $t5, 0($a0)
+   bne $t5, 0x0A, is_FF # if the input not just 'q'
+   beq $t0, 0X51, quit
+   beq $t0, 0X71, quit
    j is_FF
-
-choose_algorithim_quit:
-   jal quit
 
    # =========== Check if equail FF ===========
 is_FF:
+   addi $a0, $a0, -1
    lb $t0, 0($a0) # First charachter
    bne $t0, 0x46, is_BF # if $a0[0] != F
    
@@ -225,6 +228,9 @@ file_handling:
 #handle if equal Q | q
    la $a1, file_path
    lb $t4, 0($a1)
+   addi $a1, $a1, 1
+   lb $t5, 0($a1)
+   bne $t5, 0, no_quit # if the input not just 'q'
    beq $t4, 0x51, quit
    beq $t4, 0x71, quit
    j no_quit # if not equail, SKIP
@@ -246,7 +252,7 @@ no_quit:
     
     bgez $s1, no_error # if no error, skip
 
-#== == == == == = IF error == == == == == =
+#=========== IF error =========== 
 #ERROR MESSAGE
     la $a1, error_file_msg
     jal print_message
@@ -256,7 +262,7 @@ no_quit:
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     jr $ra
-#== == == == == = IF error == == == == == = 
+#=========== IF error =========== 
 
 no_error:
 
@@ -296,21 +302,27 @@ no_error:
 read_sizes: 
     addi $sp, $sp, -4
     sw $ra, 0($sp)
-
+    
+    li $t0, 4
+    mul $a0, $a0, $t0 # (number of numbers * 4 (float))
+    li $v0, 9
+    syscall
+    move $t4, $v0 # address of alocated array
+    move $s4, $v0
+    
     la $t0, size
 #flag for if we are in the integer area or decimal, EX : 0.12(0 : integer area) - (12 : decimal area)
     li $t2, 0 # 0 integer area, 1 decimal area
     
-    la $t4, sizes_array
     li $t5, 0 # will be used to count length
     
     
 read_sizes_loop:
     lb $t1, 0($t0)
     beqz $t1, end_read_sizes_loop
-    beq $t1, 0x2C, comma # the value of ',' in ASCII (file example: 0.12,0.9,0.4)
+    beq $t1, 0x2C, skip # the value of ',' in ASCII (file example: 0.12,0.9,0.4) then skip
     beq $t1, 0x2E, point # the value of '.' in ASCII (file example: 0.12,0.9,0.4)
-    beq $t1, 0x30, zero_integer_handle # if zero, handle it
+    beq $t1, 0x30, skip # if zero, handle it
     bne $t1, 0x30, non_zero_integer # the value of zero in ASCII (to compare if the user didn't enter a 0.numbers, file example: 0.12,0.9,0.4)
     addi $t0, $t0, 1
     j read_sizes_loop
@@ -361,20 +373,13 @@ end_point_loop:
     addi $t4, $t4, 4
     beqz $t1, end_read_sizes_loop
     
-comma: # if facing a comma ',' (0.12,0.13)
-  
+skip: # if facing a comma ',' (0.12,0.13) or others need to skip
+    
     addi $t0, $t0, 1
     li $t2, 0
-    j read_sizes_loop # continue
-  
-zero_integer_handle: # if facing a '0' (0.plaplapla)
-
-    addi $t0, $t0, 1
     lb $t1, 0($t0)
-#if after the zero is not a point or other zero, ERROR(00.222, 0.plapla)
-    beq $t1, 0x30, read_sizes_loop
-    beq $t1, 0x2E, read_sizes_loop
-    j non_zero_integer
+    beq $t1, 0x2C, non_zero_integer # if two comma in a row, that's unvalid
+    j read_sizes_loop # continue
    
 non_zero_integer:
     
@@ -460,6 +465,33 @@ quit:
 
     li $v0, 10
     syscall 
+
+# ==============================================================
+# ==================== ARRAY Length Function ====================
+# ============================================================== 
+
+get_array_length:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    la $a0, size
+    li $t1, 0
+
+get_array_length_loop:
+    lb $t0, 0($a0)
+    addi $a0, $a0, 1
+    beq $t0, 0, end_get_array_length_loop
+    beq $t0, 0x2C, comma
+    j get_array_length_loop
+    
+comma:
+   addi $t1, $t1, 1
+   j get_array_length_loop
+    
+end_get_array_length_loop:
+    addi $t1, $t1, 1
+    move $v0, $t1
+    jr $ra
     
 # ==============================================================
 # ==================== Print ARRAY Function ====================

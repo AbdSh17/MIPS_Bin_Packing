@@ -41,8 +41,22 @@
 #  [   ]  [   ]  [   ] [   ]
 #  [   ]  [   ]  [   ] [   ]
 #  [   ]  [   ]  [   ] [   ]
+
+
+#        | FF
+#        | FF
+#        | FF
+#        ⬇ ️FF
+
+#  [ 0.8 , 0.12 , 0.4 , 0.7 ] - Main array 
+#  [ 1   ,   2  ,  3  ,   4 ] - Numbered Array
+#  [ 0.08 , 0.6  , 0.3 , 1.0 ] - Oned Array
+#  [ 0xAA, 0XBB , 0XCC ,0XDD] - Array Of Addresses
+#  [0.8]  [0.4]  [0.7] [   ]
+#  [0.12] [   ]  [   ] [   ]
 #  [   ]  [   ]  [   ] [   ]
 #  [   ]  [   ]  [   ] [   ]
+
 # ================= Save Registors =================
 # $S0: Maximum_input bits (255)
 # $S1: Array Lenght

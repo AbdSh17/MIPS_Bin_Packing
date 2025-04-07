@@ -16,10 +16,6 @@
     full_bin_capacity: .float 1.0
     end_of_array: .float -1.0
     
-    # *************** Main array *******************
-    #sizes_array: .float 0.0:40
-    # *************** Main array *******************
-    
     maximum_input: .half 255
     point_1__float_value: .float 0.1
     ten_float_value: .float 10.0
@@ -36,7 +32,17 @@
 .text
     .globl main, print_array, print_message, add_null, file_handling, get_array_length, string_to_integer,choose_algorithim,first_fit,best_fit,quit
 
-
+# ================== Arrays =========================
+#  [ 0.8 , 0.12 , 0.4 , 0.7 ] - Main array 
+#  [ 1   ,   2  ,  3  ,   4 ] - Numbered Array
+#  [ 1.0 , 1.0  , 1.0 , 1.0 ] - Oned Array
+#  [ 0xAA, 0XBB , 0XCC ,0XDD] - Array Of Addresses
+#  [   ]  [   ]  [   ] [   ]
+#  [   ]  [   ]  [   ] [   ]
+#  [   ]  [   ]  [   ] [   ]
+#  [   ]  [   ]  [   ] [   ]
+#  [   ]  [   ]  [   ] [   ]
+#  [   ]  [   ]  [   ] [   ]
 # ================= Save Registors =================
 # $S0: Maximum_input bits (255)
 # $S1: Array Lenght
@@ -65,24 +71,23 @@ menu:
     la $a1, new_line
     jal print_message
     
-    jal get_array_length #(return array length through $v0)
+    jal get_array_length # return array length through $v0
     move $a0, $v0
     move $s1, $v0
-    jal read_sizes # get array size through $a0
+    jal read_sizes # takes the array size through $a0
     # ============ // Create array ============
     
     # ============ Print array ============
     la $a1, sizes_array_content_message
     jal print_message
     
-    move $t0, $s3
+    move $t0, $s3 
     move $a1, $s1
     jal print_array
     # ============ // Print array ============
     
     # =========== Prepare bins ===========
     move $a0, $s1
-    move $t9,$a0
     jal make_numbered_array
     move $s4,$v0
     
@@ -116,7 +121,7 @@ v0_is_not_1:
 v0_is_not_2:
     la $a1, unvalid_fitting_method
     jal print_message
-    j done_fitting
+    j choose_fitting_method
     
 done_fitting:
     move $a0, $s6 # Array of addresses
@@ -532,7 +537,7 @@ non_zero_integer:
     la $a1, file_error_more_than_zero # if the integer is not zero, ERROR
     jal print_message
     
-    jal quit
+    j menu
 
 end_read_sizes_loop:
     move $v0, $t5 # the return address of array length

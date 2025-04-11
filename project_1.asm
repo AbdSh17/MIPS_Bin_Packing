@@ -145,6 +145,9 @@ done_fitting:
     move $a0, $s6 # Array of addresses
     move $a1, $s1 # Array length
     jal print_fitting
+    move $a0, $s6 # Array of addresses
+    move $a1, $s1 # Array length
+    move $a2, $s5 
     
     j restart_fitting
     # ============ // Choose Algorithim ============
@@ -759,7 +762,6 @@ address_array_loop:
     move $a1, $t5 # print new line
     jal print_message
 
-    
 elemnts_array_loop:  
     
     lwc1 $f12,0($t3)
@@ -774,7 +776,7 @@ elemnts_array_loop:
     li $v0,2
     syscall
     
-    add $t3,$t3,4
+    addi $t3,$t3,4
 
     la $a1, space
     jal print_message
@@ -798,7 +800,6 @@ print_array:
     sw $a0, 0($sp)
     
     la $t1, space
-    
     move $t3, $a1
 
 print_array_loop:

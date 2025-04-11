@@ -15,6 +15,10 @@
     fitting_method: .space 3 # two letters + '\n' = 3 bytes
     full_bin_capacity: .float 1.0
     end_of_array: .float -1.0
+    One_Point_Half: .float 1.5
+    
+    
+    # C:\Users\Asus\MIPS_Bin_Packing\temp.csv
     
     maximum_input: .half 255
     point_1__float_value: .float 0.1
@@ -46,7 +50,7 @@
 #        | FF
 #        | FF
 #        | FF
-#        ⬇ ️FF
+#        ⬇ �?FF
 
 #  [ 0.8 , 0.12 , 0.4 , 0.7 ] - Main array 
 #  [ 1   ,   2  ,  3  ,   4 ] - Numbered Array
@@ -99,7 +103,7 @@ menu:
     move $a1, $s1
     jal print_array
     # ============ // Print array ============
-    
+restart_fitting:
     # =========== Prepare bins ===========
     move $a0, $s1
     jal make_numbered_array
@@ -142,7 +146,7 @@ done_fitting:
     move $a1, $s1 # Array length
     jal print_fitting
     
-    j choose_fitting_method
+    j restart_fitting
     # ============ // Choose Algorithim ============
 end_menu:
     li $v0, 10
@@ -220,10 +224,65 @@ found:
 # ==================== Best fit Function =============================
 # ====================================================================
 best_fit:
-    la $a1, file_content_message # Print this message for debugging, remove it later
-    jal print_message
-   
-    jal quit
+    move $t1,$a0 #num of elements 
+	la $t2,One_Point_Half
+	lwc1 $f6,0($t2) #min number
+	move $t2,$a1 #address of the array
+	li $t3,0 #counter
+	
+FirstLoop: #first loop to go over all the items
+	lwc1 $f1,0($t2)
+	li $t4,0 #counter for the second loop
+	move $t5,$a2 #contains the 1's array
+	move $t6,$a3 #contains the array of arrays
+	mov.s $f0,$f6
+
+SecondLoop: #second loop to go over the bins
+	lwc1 $f2,0($t5)
+
+	c.lt.s $f1,$f2  #bgt $f2,$f1,greater
+	bc1t Greater
+	
+Secondloop_continued:
+	
+	add $t5,$t5,4
+	add $t6,$t6,4
+	add $t4,$t4,1
+	beq $t4,$t1,BF_Loop_Finished
+	b SecondLoop
+	
+Greater:
+	c.lt.s $f2,$f0
+	bc1t New_Min_Found
+	b Secondloop_continued
+
+New_Min_Found:
+	mov.s $f0,$f2
+	move $t0,$t5 #save the address of 1's the new min
+	move $t8,$t6 # save the address of the bin for the new min
+	b Secondloop_continued
+	
+BF_Loop_Finished:
+	lwc1 $f2,0($t0)
+	sub.s $f2,$f2,$f1
+	swc1 $f2,0($t0)
+	move $t7,$a1 #put the value temporily in t7
+	lw $t0,0($t8) #put the address of the bin in a1
+	move $a1,$t0
+	move $t6,$ra #put the contet inside of t8 so we can return to the main fucntion
+	jal return_first_empty_cell
+	move $a1,$t7 # return the values
+	move $ra,$t6
+	move $t7,$v0
+	swc1 $f1,0($t7) #store the item at the returned address
+	
+	add $t2,$t2,4 #increment for the loop
+	add $t3,$t3,1
+	bne $t3,$t1 FirstLoop
+	
+        jr $ra
+	
+	
 
 # ====================================================================
 # ==================== Make Numbered Array Function ==================== 

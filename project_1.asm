@@ -533,6 +533,9 @@ no_error:
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     
+    # la $a1, size
+    # jal add_null
+    
     li $v0, 0
     jr $ra
 
@@ -558,6 +561,7 @@ read_sizes:
     
 read_sizes_loop:
     lb $t1, 0($t0)
+   #  beq $t1, 0x0A, end_read_sizes_loop
     beqz $t1, end_read_sizes_loop
     beq $t1, 0x2C, skip # the value of ',' in ASCII (file example: 0.12,0.9,0.4) then skip
     beq $t1, 0x2E, point # the value of '.' in ASCII (file example: 0.12,0.9,0.4)
@@ -738,13 +742,15 @@ print_fitting_2_file: # $a0: Fitting Array Address - $a1: Array Length - $a2: ou
    
    
    li $t2, -1 # Counter
+   li $t6, 0
    
    la $t5, set_of_dashes
    la $t7, output_file_buffer
    la $t9, bin_msg
    
 address_array_loop_2_file:
-
+    
+    beqz $t6, skip_dashes
     move $a0, $t7
     la $a1, set_of_pipes
     jal conncat_string # conncat dashes
@@ -764,6 +770,8 @@ address_array_loop_2_file:
     sb $t4, 0($t7)  # print new line
     addi $t7, $t7, 1
     # ==== print dashes ====
+
+skip_dashes:
 
     addi $t2, $t2, 1
     beq $t2, $t1, end_print_fitting_2_file
@@ -843,6 +851,15 @@ elemnts_array_loop_2_file:
     j elemnts_array_loop_2_file
     
 end_print_fitting_2_file:
+    
+    move $a0, $t7
+    la $a1, minimum_bins_msg
+    jal conncat_string # conncat dashes
+    move $t7, $v0
+    
+    addi $t2, $t2, 0x30
+    sb $t2, 0($t7)
+    addi $t7, $t7,1
     
     la $a1, output_file_buffer
     jal print_message

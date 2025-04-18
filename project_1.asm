@@ -8,22 +8,28 @@
     requist_fitting_method: .asciiz "\n\nPlease enter the fitting method \nEnter FF for 'first fit' or BF for 'best fit', Enter q/Q to quit: " 
     file_content_message: .asciiz "\nFile read contant: "
     sizes_array_content_message: .asciiz "Splited Array: "
-    
+    output_file_name:    .asciiz "output.txt"
+    bin_msg: .asciiz "Bin "
+    set_of_dashes: .asciiz "------------------------"
+    set_of_pipes: .asciiz "|||||||"
+    minimum_bins_msg: .asciiz "The minimum number of required Bins is:  "
+    output_file_buffer: .space 1024
     # ============ Constant =================
     .align 2 # default is '2' BTW, but for readability
     size: .space 255 # saving the function content
     fitting_method: .space 3 # two letters + '\n' = 3 bytes
+    float_2_string_converting: .space 32
+    # integer_2_string
     full_bin_capacity: .float 1.0
     end_of_array: .float -1.0
     One_Point_Half: .float 1.5
-    
-    
-    # C:\Users\Asus\MIPS_Bin_Packing\temp.csv
     
     maximum_input: .half 255
     point_1__float_value: .float 0.1
     ten_float_value: .float 10.0
     zero_float_value: .float 0.0
+    max_float_digit: .float 10000000.0
+
     
     #  ============ FILE PATH =================
     file_path: .space 255
@@ -35,7 +41,7 @@
 
 .text
     .globl main, print_array, print_message, add_null, file_handling, get_array_length, string_to_integer,choose_algorithim,first_fit,best_fit,quit
-
+ 
 # ================== Arrays =========================
 #  [ 0.8 , 0.12 , 0.4 , 0.7 ] - Main array 
 #  [ 1   ,   2  ,  3  ,   4 ] - Numbered Array
@@ -50,7 +56,7 @@
 #        | FF
 #        | FF
 #        | FF
-#        ⬇ �?FF
+#        ⬇ FF
 
 #  [ 0.8 , 0.12 , 0.4 , 0.7 ] - Main array 
 #  [ 1   ,   2  ,  3  ,   4 ] - Numbered Array
@@ -144,7 +150,9 @@ v0_is_not_2:
 done_fitting:
     move $a0, $s6 # Array of addresses
     move $a1, $s1 # Array length
-    jal print_fitting
+    # jal print_fitting
+    jal print_fitting_2_file
+    # jal print_fitting
     move $a0, $s6 # Array of addresses
     move $a1, $s1 # Array length
     move $a2, $s5 
@@ -711,30 +719,63 @@ end_get_array_length_loop:
     addi $t1, $t1, 1
     move $v0, $t1
     jr $ra
+
 # ==============================================================
-# ==================== Print Fitting Function ====================
-# ============================================================== 
-print_fitting: # $a0: Fitting Array Address - $a1: Array Length
+# ==================== Print Fitting_2_file Function ===========
+# ==============================================================
+
+ # output_file_name:    .asciiz "output.txt"
+ # output_file_buffer: space 1024
+   
+print_fitting_2_file: # $a0: Fitting Array Address - $a1: Array Length - $a2: output file address
    
    addi $sp, $sp, -4
    sw $ra, 0($sp) 
    
    move $t0, $a0 # Fitting Array Address
    move $t1, $a1 # Array Length
+   move $t4, $a2 # Output File Address
+   
+   
    li $t2, -1 # Counter
-   la $t4, space # to print spaces
-   la $t5, new_line # to print new lines
-   la $t8, colon
-address_array_loop:
+   
+   la $t5, set_of_dashes
+   la $t7, output_file_buffer
+   la $t9, bin_msg
+   
+address_array_loop_2_file:
+
+    move $a0, $t7
+    la $a1, set_of_pipes
+    jal conncat_string # conncat dashes
+    move $t7, $v0
+    
+    # ==== print dashes ====
+    li $t4, 0x0A # new line ascii
+    sb $t4, 0($t7)  # print new line
+    addi $t7, $t7, 1
+    
+    move $a0, $t7
+    move $a1, $t5
+    jal conncat_string # conncat dashes
+    move $t7, $v0
+    
+    li $t4, 0x0A # new line ascii
+    sb $t4, 0($t7)  # print new line
+    addi $t7, $t7, 1
+    # ==== print dashes ====
 
     addi $t2, $t2, 1
-    beq $t2, $t1, end_print_fitting
+    beq $t2, $t1, end_print_fitting_2_file
     
     # ==== print new line ====
-    move $a1, $t5 
-    jal print_message
-    move $a1, $t5 
-    jal print_message
+    
+    li $t4, 0x0A # new line ascii
+    sb $t4, 0($t7)
+    addi $t7, $t7, 1
+    sb $t4, 0($t7)
+    addi $t7, $t7, 1
+    
     # ==== print new line ====
     
     # ==== load array address ====
@@ -746,52 +787,235 @@ address_array_loop:
     lwc1 $f12,0($t3)
     cvt.w.s $f13, $f12
     mfc1    $t6, $f13     
-    beq $t6, -1 , end_print_fitting
+    beq $t6, -1 , end_print_fitting_2_file
     # ==== check the first number of the array ====
     
     # ==== print index ====
-    move $a0, $t2
-    li $v0, 1
-    syscall 
+    move $a0, $t7
+    move $a1, $t9
+    jal conncat_string # conncat "bin " 
+    move $t7, $v0 
     
-    move $a1, $t8 # print colon
-    jal print_message
+    addi $t6, $t2, 0x30 # index to string
+    sb $t6, 0($t7)
+    addi $t7, $t7, 1
+    
+    li $t4, 0x3A # colon ascii
+    sb $t4, 0($t7) # print colon
+    addi $t7, $t7, 1
     # ==== print index ====
     
+    # ==== print dashes ====
+    li $t4, 0x0A # new line ascii
+    sb $t4, 0($t7)  # print new line
+    addi $t7, $t7, 1
     
-    move $a1, $t5 # print new line
-    jal print_message
+    move $a0, $t7
+    move $a1, $t5
+    jal conncat_string # conncat dashes
+    move $t7, $v0
+    
+    li $t4, 0x0A # new line ascii
+    sb $t4, 0($t7)  # print new line
+    addi $t7, $t7, 1
+    # ==== print dashes ====
 
-elemnts_array_loop:  
+elemnts_array_loop_2_file:  
     
     lwc1 $f12,0($t3)
     
     # ==== check the number if -1 ====
     cvt.w.s $f13, $f12
     mfc1    $t6, $f13     
-    beq $t6, -1 , address_array_loop
+    beq $t6, -1 , address_array_loop_2_file
     # ==== check the number if -1 ====
     
-    # print the number
-    li $v0,2
-    syscall
-    
+    move $a0, $t7 # where we start concat
+    jal conncat_float
+    move $t7, $v0 # where we end concat
+
     addi $t3,$t3,4
 
-    la $a1, space
+    li $t4, 0x20 # space line ascii
+    sb $t4, 0($t7)  # print space
+    addi $t7, $t7, 1
+    
+    j elemnts_array_loop_2_file
+    
+end_print_fitting_2_file:
+    
+    la $a1, output_file_buffer
     jal print_message
     
-    j elemnts_array_loop
-    
-end_print_fitting:
-
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     jr $ra
+
+# ==============================================================
+# ==================== Conncat Float Function ==================
+# ==============================================================
+
+conncat_float: # $f12: number - $a0: buffer location before - $v0: buffer location after
+     
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
     
+    addi $sp, $sp, -4
+    sw $t0, 0($sp)
+    
+    addi $sp, $sp, -4
+    sw $t1, 0($sp)
+    
+    addi $sp, $sp, -4
+    sw $t2, 0($sp)
+    
+    addi $sp, $sp, -4
+    sw $t3, 0($sp)
+    
+    addi $sp, $sp, -4
+    sw $t4, 0($sp)
+    
+    addi $sp, $sp, -4
+    sw $t5, 0($sp)
+    
+    move $t1, $a0
+    
+    la $t0, max_float_digit
+    l.s $f0, 0($t0) # load 10^7 initially
+    
+    mul.s $f0, $f0, $f12 # f0 = $f12 * 10^7
+    cvt.w.s $f0, $f0 # convert to int
+    mfc1    $t0, $f0 # $t0 = int($f12 * 10^7)
+    
+    # ====== ADD "0." ======
+    
+    li $t2, 0x30 # '0'
+    
+    sb $t2, 0($t1)
+    addi $t1, $t1, 1
+    
+    li $t2, 0x2E # .
+    sb $t2, 0($t1)
+    addi $t1, $t1, 1
+    
+    # ====== ADD "0." ======
+      
+    # ====== ADD str(int($f12 * 10^7)) ======
+    
+    li $t2, 0 # counter to know how much to pop
+    li $t4, 0 # flag for if we found a number or still zero
+    
+push_str_loop:
+
+    div  $t0, $t0, 10 # $t0 = $t0 / 10
+    mfhi $t3 # t3 = $t0 % 10
+    
+    bnez $t4, not_RH_zero
+    beqz $t3, push_str_loop
+    li $t4, 1
+not_RH_zero:
+    addi $t3, $t3, 0x30 # convert into string
+    
+    addi $sp, $sp, -4
+    sw $t3, 0($sp)
+    addi $t2, $t2, 1
+    
+    bnez $t0, push_str_loop
+
+pop_str_loop:
+    
+    beqz $t2, end_pop_str_loop
+    
+    lw $t3, 0($sp)
+    addi $sp, $sp, 4
+    
+    sb $t3, 0($t1)
+    addi $t1, $t1, 1
+    
+    sub $t2, $t2, 1
+    
+    j pop_str_loop
+end_pop_str_loop:
+
+    # ====== ADD str(int($f12 * 10^7)) ======
+   
+    move $v0, $t1
+    
+    lw $t5, 0($sp)
+    addi $sp, $sp, 4
+    
+    lw $t4, 0($sp)
+    addi $sp, $sp, 4
+    
+    lw $t3, 0($sp)
+    addi $sp, $sp, 4
+    
+    lw $t2, 0($sp)
+    addi $sp, $sp, 4
+    
+    lw $t1, 0($sp)
+    addi $sp, $sp, 4
+     
+    lw $t0, 0($sp)
+    addi $sp, $sp, 4
+     
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    
+    jr $ra
+
+# ==============================================================
+# ==================== Conncat String Function =================
+# ==============================================================
+
+conncat_string: # a0: old original buffer location - $a1: want to conncat buffer location - $v0: new original buffer location
+    
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    addi $sp, $sp, -4
+    sw $t0, 0($sp)
+    
+    addi $sp, $sp, -4
+    sw $t1, 0($sp)
+    
+    addi $sp, $sp, -4
+    sw $t2, 0($sp)
+
+    move $t0, $a0 # old buffer
+    move $t1, $a1 # new buffer
+    
+conncat_str_loop: 
+    
+    lb $t2, 0($t1) # load from new buffer
+    beqz $t2, end_conncat_str_loop
+    sb $t2, 0($t0) # store into new buffer
+    addi $t1, $t1, 1
+    addi $t0, $t0, 1
+    j conncat_str_loop
+
+end_conncat_str_loop:
+    
+    move $v0, $t0
+    
+    lw $t2, 0($sp)
+    addi $sp, $sp, 4
+    
+    lw $t1, 0($sp)
+    addi $sp, $sp, 4
+    
+    lw $t0, 0($sp)
+    addi $sp, $sp, 4
+
+    lw $a0, 0($sp)
+    addi $sp, $sp, 4
+    
+    jr $ra
+
 # ==============================================================
 # ==================== Print ARRAY Function ====================
-# ============================================================== 
+# ==============================================================
+
 print_array:
     addi $sp, $sp, -4
     sw $ra, 0($sp)

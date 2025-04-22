@@ -13,6 +13,7 @@
     set_of_dashes: .asciiz "------------------------"
     set_of_pipes: .asciiz "|||||||"
     minimum_bins_msg: .asciiz "The minimum number of required Bins is:  "
+    error_output_file_msg: .asciiz "Can't find the file -output.txt- Please make sure to have it in your directory \n"
     output_file_buffer: .space 1024
     # ============ Constant =================
     .align 2 # default is '2' BTW, but for readability
@@ -157,7 +158,8 @@ done_fitting:
     move $a1, $s1 # Array length
     move $a2, $s5 
     
-    j restart_fitting
+    # j restart_fitting
+    j menu
     # ============ // Choose Algorithim ============
 end_menu:
     li $v0, 10
@@ -561,8 +563,8 @@ read_sizes:
     
 read_sizes_loop:
     lb $t1, 0($t0)
-   #  beq $t1, 0x0A, end_read_sizes_loop
     beqz $t1, end_read_sizes_loop
+    beq $t1, 0x0A, end_read_sizes_loop # '\n'
     beq $t1, 0x2C, skip # the value of ',' in ASCII (file example: 0.12,0.9,0.4) then skip
     beq $t1, 0x2E, point # the value of '.' in ASCII (file example: 0.12,0.9,0.4)
     beq $t1, 0x30, skip # if zero, handle it
@@ -584,9 +586,10 @@ point:
 
     la $t7, ten_float_value 
     l.s $f2, 0($t7) # load 10.0 initially
-    
+     
 point_loop: # loop to keep counting decimals after the point .123456789
     lb $t1, 0($t0)
+    beq $t1, 0x0A, end_point_loop # If '\n'
     beqz $t1, end_point_loop # if the next is null
     beq $t1, 0x2C, end_point_loop # if the next is comma
     bgt $t1, 0x39, non_zero_integer # ERROR ( > 9 )
@@ -857,13 +860,48 @@ end_print_fitting_2_file:
     jal conncat_string # conncat dashes
     move $t7, $v0
     
-    addi $t2, $t2, 0x30
+    addi $t2, $t2, 0x30 # convert index toString
     sb $t2, 0($t7)
     addi $t7, $t7,1
+    
+    sb $zero, 0($t7)
+    addi $t7, $t7, 1
     
     la $a1, output_file_buffer
     jal print_message
     
+    #Open the file(syscall 13)
+    #$a0 : file_path
+    #$a1 : Read or Write
+    #$a2 : Mode(ignore)
+    la $a0, output_file_name
+    li $a1, 1
+    li $a2, 1
+    li $v0, 13
+    syscall
+    
+    bgez $v0, no_openning_error
+
+    la $a1, error_output_file_msg
+    jal print_message
+
+no_openning_error:
+    
+    # Write to afile (syscall 15)
+    #$a0: File descriptor
+    #$a1: Address of Buffer
+    #$a2: Number of chars to write 
+    move $a0, $v0
+    la $a1, output_file_buffer
+    sub $a2, $t7, $a1 # Lenght of the buffer
+    li $v0, 15
+    syscall
+    
+    # Close File (syscall 16)
+    #$a0: File descriptor
+    li $v0, 16
+    syscall
+
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     jr $ra
